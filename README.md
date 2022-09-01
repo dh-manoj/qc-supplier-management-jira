@@ -12,6 +12,8 @@ pip install -r requirements.txt
 cp .envrc.sample .envrc
 
 // edit .envrc to update JIRA_API_TOKEN
+
+source ./.envrc
 ```
 
 JIRA_API_TOKEN can be created in JIRA profile.
