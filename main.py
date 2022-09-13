@@ -23,8 +23,14 @@ def has_BE_label(issue):
 def has_FE_label(issue):
     return any(l for l in issue.fields.labels if l == FRONTEND_LABEL)
 
+def pretty(issue):
+    return '{} : {} [{}/{}]'.format(issue.key, issue.fields.summary, issue.fields.issuetype, issue.fields.status)
+
+def get_csv(issue):
+    return '{},{},{},{}'.format(issue.key, issue.fields.summary, issue.fields.issuetype, issue.fields.status)
+
 def print_issue(issue):
-    print('{} : {} [{}/{}]'.format(issue.key, issue.fields.summary, issue.fields.issuetype, issue.fields.status))
+    print(pretty(issue))
 
 def print_json(issue):
     json_object = json.dumps(issue.raw, indent=4)
@@ -37,6 +43,9 @@ class Jira:
 
     def get_jira(self):
         return self.__jira
+
+    def get_all_issues(self, user_name):
+        return self.__jira.search_issues(f"project={self.__project} and (assignee was '{user_name}') and status = Done")
 
     def get_current_sprint_issues(self, status: str = ''):
         jql = f'project={self.__project} and sprint in openSprints() '
@@ -55,6 +64,29 @@ class Jira:
         return [issue for issue in self.get_current_sprint_issues() if has_no_subtask(issue) and not is_subtask(issue)]
 
 
+def print_fields(values: str):
+    # print(values)
+    for v in values:
+        v = v.replace(", ", " ")
+        d = v[v.find("[") + 1:v.find("]")]
+        res = dict(item.split("=") for item in d.split(","))
+    return res
+
+def fetch_all_tickets():
+    token = os.getenv('JIRA_API_TOKEN', '')
+    be_user_name = os.getenv('DEFAULT_BACKEND_USER_NAME')
+    project_id = os.getenv('PROJECT_ID')
+    jira= Jira(token, project_id)
+
+    issues = jira.get_all_issues(be_user_name)
+
+    for issue in issues:
+        sprint = print_fields(issue.raw['fields']['customfield_10621'])
+        story_point = issue.raw['fields']['customfield_10013'] if 'customfield_10013' in issue.raw['fields'] else '-'
+        print('{},{},{}'.format(get_csv(issue), sprint['name'], story_point))
+
+
+
 if __name__ == '__main__':
     token = os.getenv('JIRA_API_TOKEN', '')
     fe_user_name = os.getenv('DEFAULT_FRONTEND_USER_NAME')
@@ -62,6 +94,7 @@ if __name__ == '__main__':
     jira= Jira(token, project_id)
 
     issues = jira.get_current_sprint_open_issues()
+
 
     for issue in issues:
         if is_subtask(issue):
@@ -89,6 +122,7 @@ if __name__ == '__main__':
             be_issue = jira.get_jira().create_issue(fields=issue_dict)
             print('created BE ', be_issue.key, ' subtask for ', issue.key)
 
+        if has_FE_label(issue):
             # create frontend subtask
             issue_dict['summary'] = FRONTEND_LABEL
             fe_issue = jira.get_jira().create_issue(fields=issue_dict)
